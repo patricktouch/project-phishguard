@@ -1,0 +1,490 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PhishGuard — Threat Intelligence Dashboard</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;700&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#0a0c10;
+  --surface:#0f1117;
+  --surface-2:#141720;
+  --surface-3:#1a1f2e;
+  --border:#1e2535;
+  --border-bright:#2a3450;
+  --text:#e2e8f0;
+  --text-muted:#7a8aaa;
+  --text-faint:#3a4560;
+  --primary:#00d4ff;
+  --primary-dim:#0099bb;
+  --primary-glow:rgba(0,212,255,0.15);
+  --danger:#ff4560;
+  --danger-dim:#cc2040;
+  --danger-glow:rgba(255,69,96,0.15);
+  --warning:#ffb700;
+  --warning-glow:rgba(255,183,0,0.15);
+  --success:#00e396;
+  --success-glow:rgba(0,227,150,0.15);
+  --font-mono:'JetBrains Mono',monospace;
+  --font-body:'Inter',sans-serif;
+  --radius:8px;
+  --radius-lg:12px;
+}
+
+html{background:var(--bg);color:var(--text);font-family:var(--font-body);font-size:16px;-webkit-font-smoothing:antialiased;}
+body{min-height:100vh;background:var(--bg);}
+
+/* Scanline overlay */
+body::before{
+  content:'';position:fixed;inset:0;
+  background:repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,0,0,0.03) 2px,rgba(0,0,0,0.03) 4px);
+  pointer-events:none;z-index:9999;
+}
+
+/* Header */
+.header{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:16px 32px;
+  background:var(--surface);
+  border-bottom:1px solid var(--border);
+  position:sticky;top:0;z-index:100;
+}
+.logo{display:flex;align-items:center;gap:12px;}
+.logo svg{width:32px;height:32px;}
+.logo-text{font-family:var(--font-mono);font-size:18px;font-weight:700;color:var(--primary);letter-spacing:2px;text-transform:uppercase;}
+.logo-sub{font-family:var(--font-mono);font-size:10px;color:var(--text-muted);letter-spacing:3px;margin-top:2px;}
+.header-right{display:flex;align-items:center;gap:16px;}
+.status-dot{width:8px;height:8px;border-radius:50%;background:var(--success);box-shadow:0 0 8px var(--success);animation:pulse 2s infinite;}
+.status-text{font-family:var(--font-mono);font-size:11px;color:var(--success);letter-spacing:1px;}
+.last-updated{font-family:var(--font-mono);font-size:10px;color:var(--text-faint);}
+
+/* API Key Input */
+.api-bar{
+  padding:12px 32px;
+  background:var(--surface-2);
+  border-bottom:1px solid var(--border);
+  display:flex;align-items:center;gap:12px;
+}
+.api-label{font-family:var(--font-mono);font-size:11px;color:var(--text-muted);letter-spacing:2px;white-space:nowrap;}
+.api-input{
+  flex:1;max-width:340px;
+  background:var(--surface-3);
+  border:1px solid var(--border-bright);
+  border-radius:var(--radius);
+  padding:8px 14px;
+  font-family:var(--font-mono);font-size:12px;color:var(--text);
+  outline:none;
+  transition:border-color .2s,box-shadow .2s;
+}
+.api-input:focus{border-color:var(--primary);box-shadow:0 0 0 3px var(--primary-glow);}
+.btn{
+  padding:8px 20px;border-radius:var(--radius);border:none;cursor:pointer;
+  font-family:var(--font-mono);font-size:12px;font-weight:500;letter-spacing:1px;
+  transition:all .2s;
+}
+.btn-primary{background:var(--primary);color:#000;}
+.btn-primary:hover{background:var(--primary-dim);box-shadow:0 0 16px var(--primary-glow);}
+.auto-refresh{display:flex;align-items:center;gap:8px;margin-left:auto;}
+.toggle{position:relative;width:36px;height:20px;cursor:pointer;}
+.toggle input{opacity:0;width:0;height:0;}
+.toggle-slider{position:absolute;inset:0;background:var(--border-bright);border-radius:20px;transition:.3s;}
+.toggle-slider::before{content:'';position:absolute;width:14px;height:14px;left:3px;top:3px;background:var(--text-muted);border-radius:50%;transition:.3s;}
+.toggle input:checked+.toggle-slider{background:var(--primary);}
+.toggle input:checked+.toggle-slider::before{transform:translateX(16px);background:#000;}
+.toggle-label{font-family:var(--font-mono);font-size:10px;color:var(--text-muted);letter-spacing:1px;}
+
+/* Stats Bar */
+.stats-bar{
+  display:grid;grid-template-columns:repeat(4,1fr);gap:1px;
+  background:var(--border);
+  border-bottom:1px solid var(--border);
+}
+.stat-card{
+  background:var(--surface);
+  padding:20px 28px;
+  display:flex;flex-direction:column;gap:4px;
+}
+.stat-label{font-family:var(--font-mono);font-size:10px;color:var(--text-muted);letter-spacing:3px;text-transform:uppercase;}
+.stat-value{font-family:var(--font-mono);font-size:32px;font-weight:700;line-height:1;}
+.stat-value.danger{color:var(--danger);text-shadow:0 0 20px var(--danger-glow);}
+.stat-value.success{color:var(--success);text-shadow:0 0 20px var(--success-glow);}
+.stat-value.primary{color:var(--primary);text-shadow:0 0 20px var(--primary-glow);}
+.stat-value.warning{color:var(--warning);text-shadow:0 0 20px var(--warning-glow);}
+.stat-sub{font-family:var(--font-mono);font-size:10px;color:var(--text-faint);}
+
+/* Main content */
+.main{padding:28px 32px;}
+.section-header{
+  display:flex;align-items:center;gap:12px;margin-bottom:20px;
+}
+.section-title{font-family:var(--font-mono);font-size:12px;font-weight:600;letter-spacing:3px;color:var(--text-muted);text-transform:uppercase;}
+.section-line{flex:1;height:1px;background:var(--border);}
+.badge{
+  font-family:var(--font-mono);font-size:10px;padding:3px 8px;border-radius:4px;
+  letter-spacing:1px;
+}
+.badge-count{background:var(--surface-3);color:var(--text-muted);border:1px solid var(--border-bright);}
+
+/* Email Cards */
+.email-grid{display:flex;flex-direction:column;gap:10px;}
+
+.email-card{
+  background:var(--surface);
+  border:1px solid var(--border);
+  border-radius:var(--radius-lg);
+  padding:20px 24px;
+  display:grid;
+  grid-template-columns:auto 1fr auto;
+  gap:16px;align-items:center;
+  transition:border-color .2s,box-shadow .2s,transform .2s;
+  cursor:pointer;
+  position:relative;
+  overflow:hidden;
+}
+.email-card::before{
+  content:'';position:absolute;left:0;top:0;bottom:0;width:3px;
+  border-radius:3px 0 0 3px;
+}
+.email-card.phishing::before{background:var(--danger);}
+.email-card.suspicious::before{background:var(--warning);}
+.email-card.legitimate::before{background:var(--success);}
+.email-card:hover{
+  border-color:var(--border-bright);
+  box-shadow:0 4px 24px rgba(0,0,0,0.4);
+  transform:translateY(-1px);
+}
+.email-card.phishing:hover{border-color:rgba(255,69,96,0.4);box-shadow:0 4px 24px var(--danger-glow);}
+.email-card.legitimate:hover{border-color:rgba(0,227,150,0.4);box-shadow:0 4px 24px var(--success-glow);}
+
+/* Verdict icon */
+.verdict-icon{
+  width:44px;height:44px;border-radius:10px;
+  display:flex;align-items:center;justify-content:center;
+  font-size:20px;flex-shrink:0;
+}
+.verdict-icon.phishing{background:var(--danger-glow);border:1px solid rgba(255,69,96,0.3);}
+.verdict-icon.suspicious{background:var(--warning-glow);border:1px solid rgba(255,183,0,0.3);}
+.verdict-icon.legitimate{background:var(--success-glow);border:1px solid rgba(0,227,150,0.3);}
+
+/* Email info */
+.email-info{min-width:0;}
+.email-subject{
+  font-size:14px;font-weight:600;color:var(--text);
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+  margin-bottom:5px;
+}
+.email-meta{display:flex;align-items:center;gap:16px;flex-wrap:wrap;}
+.email-sender{
+  font-family:var(--font-mono);font-size:11px;color:var(--text-muted);
+}
+.email-time{font-family:var(--font-mono);font-size:10px;color:var(--text-faint);}
+.email-source{
+  font-family:var(--font-mono);font-size:9px;padding:2px 6px;
+  border-radius:4px;letter-spacing:1px;text-transform:uppercase;
+  background:var(--surface-3);color:var(--text-faint);border:1px solid var(--border);
+}
+
+/* Scores panel */
+.scores-panel{display:flex;flex-direction:column;gap:10px;min-width:240px;}
+
+.score-row{display:flex;align-items:center;gap:10px;}
+.score-label{font-family:var(--font-mono);font-size:9px;color:var(--text-muted);letter-spacing:2px;width:52px;flex-shrink:0;}
+.score-bar-wrap{flex:1;height:6px;background:var(--surface-3);border-radius:3px;overflow:hidden;}
+.score-bar{height:100%;border-radius:3px;transition:width 1s cubic-bezier(0.4,0,0.2,1);}
+.score-bar.bert{background:linear-gradient(90deg,var(--primary-dim),var(--primary));}
+.score-bar.lr{background:linear-gradient(90deg,#7b2ff7,#c471ed);}
+.score-bar.danger{background:linear-gradient(90deg,var(--danger-dim),var(--danger));}
+.score-bar.warning{background:linear-gradient(90deg,#cc8800,var(--warning));}
+.score-bar.safe{background:linear-gradient(90deg,#00a060,var(--success));}
+.score-pct{font-family:var(--font-mono);font-size:11px;font-weight:700;width:44px;text-align:right;}
+
+/* Verdict badge */
+.verdict-badge{
+  display:inline-flex;align-items:center;gap:5px;
+  font-family:var(--font-mono);font-size:10px;font-weight:600;
+  padding:4px 10px;border-radius:4px;letter-spacing:1px;margin-top:4px;
+}
+.verdict-badge.phishing{background:var(--danger-glow);color:var(--danger);border:1px solid rgba(255,69,96,0.3);}
+.verdict-badge.suspicious{background:var(--warning-glow);color:var(--warning);border:1px solid rgba(255,183,0,0.3);}
+.verdict-badge.legitimate{background:var(--success-glow);color:var(--success);border:1px solid rgba(0,227,150,0.3);}
+.verdict-dot{width:5px;height:5px;border-radius:50%;background:currentColor;}
+
+/* Empty / Error state */
+.empty-state{
+  text-align:center;padding:80px 20px;
+  font-family:var(--font-mono);color:var(--text-faint);
+}
+.empty-state .icon{font-size:40px;margin-bottom:16px;}
+.empty-state p{font-size:12px;letter-spacing:1px;}
+
+/* Loading */
+.loading{
+  display:flex;align-items:center;justify-content:center;gap:10px;
+  padding:60px;font-family:var(--font-mono);font-size:12px;color:var(--text-muted);
+}
+.spinner{
+  width:20px;height:20px;border:2px solid var(--border-bright);
+  border-top-color:var(--primary);border-radius:50%;
+  animation:spin .8s linear infinite;
+}
+
+/* Animations */
+@keyframes spin{to{transform:rotate(360deg)}}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+@keyframes fadeInUp{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
+.email-card{animation:fadeInUp .3s ease both;}
+
+/* Scrollbar */
+::-webkit-scrollbar{width:6px;}
+::-webkit-scrollbar-track{background:var(--bg);}
+::-webkit-scrollbar-thumb{background:var(--border-bright);border-radius:3px;}
+
+@media(max-width:768px){
+  .header{padding:12px 16px;}
+  .stats-bar{grid-template-columns:repeat(2,1fr);}
+  .main{padding:16px;}
+  .email-card{grid-template-columns:auto 1fr;gap:12px;}
+  .scores-panel{grid-column:1/-1;}
+  .api-bar{flex-wrap:wrap;}
+  .api-input{max-width:100%;}
+}
+</style>
+</head>
+<body>
+
+<!-- Header -->
+<header class="header">
+  <div class="logo">
+    <svg viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <rect width="32" height="32" rx="8" fill="#0f1117"/>
+      <path d="M6 10L16 17L26 10" stroke="#00d4ff" stroke-width="1.5" stroke-linecap="round"/>
+      <rect x="6" y="10" width="20" height="14" rx="2" stroke="#00d4ff" stroke-width="1.5"/>
+      <circle cx="22" cy="11" r="5" fill="#ff4560"/>
+      <path d="M20 11L21.5 12.5L24 10" stroke="white" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>
+    </svg>
+    <div>
+      <div class="logo-text">PhishGuard</div>
+      <div class="logo-sub">Threat Intelligence · Cyber 207</div>
+    </div>
+  </div>
+  <div class="header-right">
+    <div class="status-dot"></div>
+    <span class="status-text">LIVE</span>
+    <span class="last-updated" id="lastUpdated">—</span>
+  </div>
+</header>
+
+<!-- API Key Bar -->
+<div class="api-bar">
+  <span class="api-label">API KEY</span>
+  <input class="api-input" type="password" id="apiKeyInput" placeholder="Enter your API key..." />
+  <button class="btn btn-primary" onclick="loadData()">CONNECT</button>
+  <div class="auto-refresh" style="margin-left:auto;display:flex;align-items:center;gap:8px;">
+    <label class="toggle">
+      <input type="checkbox" id="autoRefresh" onchange="toggleAutoRefresh()">
+      <span class="toggle-slider"></span>
+    </label>
+    <span class="toggle-label">AUTO REFRESH</span>
+  </div>
+</div>
+
+<!-- Stats Bar -->
+<div class="stats-bar" id="statsBar">
+  <div class="stat-card">
+    <span class="stat-label">Total Analyzed</span>
+    <span class="stat-value primary" id="statTotal">—</span>
+    <span class="stat-sub">all time</span>
+  </div>
+  <div class="stat-card">
+    <span class="stat-label">Phishing</span>
+    <span class="stat-value danger" id="statPhishing">—</span>
+    <span class="stat-sub" id="statPhishingPct">— of total</span>
+  </div>
+  <div class="stat-card">
+    <span class="stat-label">Legitimate</span>
+    <span class="stat-value success" id="statLegit">—</span>
+    <span class="stat-sub" id="statLegitPct">— of total</span>
+  </div>
+  <div class="stat-card">
+    <span class="stat-label">Forwarded</span>
+    <span class="stat-value warning" id="statForwarded">—</span>
+    <span class="stat-sub">via SES pipeline</span>
+  </div>
+</div>
+
+<!-- Email Feed -->
+<main class="main">
+  <div class="section-header">
+    <span class="section-title">Email Threat Feed</span>
+    <div class="section-line"></div>
+    <span class="badge badge-count" id="feedCount">0 records</span>
+  </div>
+  <div class="email-grid" id="emailGrid">
+    <div class="empty-state">
+      <div class="icon">🔐</div>
+      <p>ENTER API KEY TO CONNECT</p>
+    </div>
+  </div>
+</main>
+
+<script>
+const BASE_URL = "https://phishguard.networkcloudify.com";
+let refreshTimer = null;
+
+// Mask email: testme112343@yahoo.com → t********43@y****.com
+function maskEmail(email) {
+  if (!email || email === "manual" || email === "unknown") return email;
+  const atIdx = email.indexOf("@");
+  if (atIdx < 0) return email;
+  const local  = email.slice(0, atIdx);
+  const domain = email.slice(atIdx + 1);
+  const dotIdx = domain.lastIndexOf(".");
+  const domName = dotIdx > 0 ? domain.slice(0, dotIdx) : domain;
+  const domExt  = dotIdx > 0 ? domain.slice(dotIdx) : "";
+  const maskedLocal  = local.length <= 3
+    ? local[0] + "*".repeat(local.length - 1)
+    : local[0] + "*".repeat(local.length - 3) + local.slice(-2);
+  const maskedDomain = domName.length <= 2
+    ? domName[0] + "*".repeat(domName.length - 1)
+    : domName[0] + "*".repeat(domName.length - 1);
+  return `${maskedLocal}@${maskedDomain}${domExt}`;
+}
+
+function formatTime(iso) {
+  const d = new Date(iso + "Z");
+  return d.toLocaleString(undefined, {month:"short",day:"numeric",hour:"2-digit",minute:"2-digit"});
+}
+
+function getVerdictClass(verdict) {
+  if (!verdict) return "phishing";
+  const v = verdict.toUpperCase();
+  if (v === "LEGITIMATE") return "legitimate";
+  if (v === "SUSPICIOUS") return "suspicious";
+  return "phishing";
+}
+
+function getVerdictIcon(cls) {
+  if (cls === "legitimate") return "✓";
+  if (cls === "suspicious") return "⚠";
+  return "✕";
+}
+
+function getScoreClass(pct) {
+  if (pct >= 75) return "danger";
+  if (pct >= 45) return "warning";
+  return "safe";
+}
+
+function renderCard(email, idx) {
+  const vc   = getVerdictClass(email.verdict);
+  const icon = getVerdictIcon(vc);
+  const bert = parseFloat(email.bert_phishing_pct) || 0;
+  const lr   = parseFloat(email.lr_phishing_pct)   || 0;
+  const bClass = getScoreClass(bert);
+  const lClass = getScoreClass(lr);
+  const masked = maskEmail(email.sender);
+  const subject = email.subject || "(No Subject)";
+  const delay = Math.min(idx * 60, 600);
+
+  return `
+  <div class="email-card ${vc}" style="animation-delay:${delay}ms" onclick="this.classList.toggle('expanded')">
+    <div class="verdict-icon ${vc}">${icon}</div>
+    <div class="email-info">
+      <div class="email-subject">${subject}</div>
+      <div class="email-meta">
+        <span class="email-sender">${masked}</span>
+        <span class="email-time">${formatTime(email.received_at)}</span>
+        <span class="email-source">${email.source || "manual"}</span>
+      </div>
+      <div class="verdict-badge ${vc}">
+        <span class="verdict-dot"></span>
+        ${email.verdict || "PHISHING"} · ${email.confidence || "High"}
+      </div>
+    </div>
+    <div class="scores-panel">
+      <div class="score-row">
+        <span class="score-label">BERT</span>
+        <div class="score-bar-wrap">
+          <div class="score-bar bert ${bClass}" style="width:${bert}%"></div>
+        </div>
+        <span class="score-pct" style="color:var(--${bClass === 'danger' ? 'danger' : bClass === 'warning' ? 'warning' : 'success'})">${bert.toFixed(1)}%</span>
+      </div>
+      <div class="score-row">
+        <span class="score-label">LR</span>
+        <div class="score-bar-wrap">
+          <div class="score-bar lr ${lClass}" style="width:${lr}%"></div>
+        </div>
+        <span class="score-pct" style="color:var(--${lClass === 'danger' ? 'danger' : lClass === 'warning' ? 'warning' : 'success'})">${lr.toFixed(1)}%</span>
+      </div>
+    </div>
+  </div>`;
+}
+
+async function loadData() {
+  const key = document.getElementById("apiKeyInput").value.trim();
+  if (!key) { alert("Please enter your API key."); return; }
+
+  const grid = document.getElementById("emailGrid");
+  grid.innerHTML = '<div class="loading"><div class="spinner"></div> FETCHING THREAT DATA...</div>';
+
+  try {
+    const headers = { "X-API-Key": key };
+
+    const [histRes, statsRes] = await Promise.all([
+      fetch(`${BASE_URL}/history?limit=200`, { headers }),
+      fetch(`${BASE_URL}/history/stats`, { headers })
+    ]);
+
+    if (histRes.status === 401 || histRes.status === 422) {
+      grid.innerHTML = '<div class="empty-state"><div class="icon">🔒</div><p>INVALID API KEY — ACCESS DENIED</p></div>';
+      return;
+    }
+
+    const emails = await histRes.json();
+    const stats  = await statsRes.json();
+
+    // Update stats
+    const total = stats.total || 0;
+    document.getElementById("statTotal").textContent     = total;
+    document.getElementById("statPhishing").textContent  = stats.phishing || 0;
+    document.getElementById("statLegit").textContent     = stats.legitimate || 0;
+    document.getElementById("statForwarded").textContent = stats.forwarded || 0;
+    document.getElementById("statPhishingPct").textContent = total ? `${((stats.phishing/total)*100).toFixed(0)}% of total` : "—";
+    document.getElementById("statLegitPct").textContent    = total ? `${((stats.legitimate/total)*100).toFixed(0)}% of total` : "—";
+    document.getElementById("feedCount").textContent = `${emails.length} record${emails.length !== 1 ? "s" : ""}`;
+    document.getElementById("lastUpdated").textContent = "Updated " + new Date().toLocaleTimeString();
+
+    if (!emails.length) {
+      grid.innerHTML = '<div class="empty-state"><div class="icon">📭</div><p>NO EMAILS ANALYZED YET</p></div>';
+      return;
+    }
+
+    grid.innerHTML = emails.map((e, i) => renderCard(e, i)).join("");
+
+  } catch(err) {
+    grid.innerHTML = `<div class="empty-state"><div class="icon">⚠</div><p>CONNECTION ERROR — ${err.message}</p></div>`;
+  }
+}
+
+function toggleAutoRefresh() {
+  const on = document.getElementById("autoRefresh").checked;
+  if (on) {
+    refreshTimer = setInterval(() => {
+      if (document.getElementById("apiKeyInput").value.trim()) loadData();
+    }, 15000);
+  } else {
+    clearInterval(refreshTimer);
+  }
+}
+
+// Allow Enter key to connect
+document.getElementById("apiKeyInput").addEventListener("keydown", e => {
+  if (e.key === "Enter") loadData();
+});
+</script>
+</body>
+</html>
