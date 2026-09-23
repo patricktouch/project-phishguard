@@ -9,6 +9,7 @@ This guide walks through deploying PhishGuard on a fresh server (tested on Ubunt
 - Git installed
 - Outbound internet access, since the server needs to reach the Hugging Face Hub to download model files
 - An AWS account with SES and SNS configured if you intend to receive forwarded emails automatically (see section 6)
+- No GPU is required. See the note in section 4 about CUDA related packages.
 
 ## 2. Clone the Repository
 
@@ -30,10 +31,21 @@ The `phishing-env` directory is excluded from version control by `.gitignore`, s
 
 ## 4. Install Dependencies
 
+Two dependency files are provided.
+
+- `requirements.txt` lists the direct, loosely versioned dependencies.
+- `requirements.lock.txt` is a full pip freeze snapshot with every dependency pinned to an exact version, including transitive dependencies. This is the recommended file for deployment, since it guarantees the same package versions used during development, which matters for a machine learning stack where minor version differences in torch or transformers can change model behavior.
+
+Install from the lock file for a reproducible deployment:
+
 ```
 pip install --upgrade pip
-pip install -r requirements.txt
+pip install -r requirements.lock.txt
 ```
+
+Note on CUDA packages: `requirements.lock.txt` includes several `nvidia-*` packages (cuBLAS, cuDNN, cuFFT, and others). These are pulled in automatically as dependencies of the standard PyTorch wheel on Linux and do not require a GPU to be present. On a CPU only server, these packages install normally and torch automatically runs on CPU. No GPU or CUDA driver setup is needed to deploy this application.
+
+If you prefer a lighter install and are comfortable resolving versions yourself, you can instead use `requirements.txt`, though this is not guaranteed to reproduce the exact environment the application was built and tested against.
 
 ## 5. Configure Environment Variables
 
@@ -148,7 +160,7 @@ Once the server is running, confirm the setup end to end:
 
 - [ ] Clone repository
 - [ ] Create and activate virtual environment
-- [ ] Install dependencies from requirements.txt
+- [ ] Install dependencies from requirements.lock.txt
 - [ ] Copy .env.example to .env and set API_KEY
 - [ ] Run pull_models.py
 - [ ] Run verify_models.py and confirm success
